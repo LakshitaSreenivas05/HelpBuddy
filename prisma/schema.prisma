@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  REQUESTER
+  HELPER
+  ADMIN
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  DECLINED
+}
+
+model User {
+  id             String           @id @default(cuid())
+  email          String           @unique
+  password       String
+  name           String?
+  image          String?
+  role           UserRole         @default(REQUESTER)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  profile        Profile?
+  helperProfile  HelperProfile?
+  bookingsAsRequester Booking[]   @relation("RequesterBookings")
+  bookingsAsHelper   Booking[]    @relation("HelperBookings")
+  reviewsAuthored    Review[]     @relation("UserReviewsAuthored")
+  reviewsReceived    Review[]     @relation("HelperReviewsReceived")
+  accounts        Account[]
+  sessions        Session[]
+}
+
+model Profile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  displayName String?
+  bio         String?
+  location    String?
+  phone       String?
+  skills      String[] @default([])
+  languages   String[] @default([])
+  avatarUrl   String?
+  socialLinks Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model HelperProfile {
+  id               String    @id @default(cuid())
+  userId           String    @unique
+  headline         String?
+  yearsOfExperience Int?
+  hourlyRate       Decimal?  @db.Decimal(10, 2)
+  travelRadiusKm   Int?
+  services         String[]  @default([])
+  availability     Json?
+  isVerified       Boolean   @default(false)
+  averageRating    Float     @default(0)
+  ratingCount      Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Booking {
+  id             String        @id @default(cuid())
+  requesterId    String
+  helperId       String
+  status         BookingStatus @default(PENDING)
+  title          String
+  description    String?
+  scheduledAt    DateTime
+  durationMinutes Int?
+  location       String?
+  price          Decimal?      @db.Decimal(10, 2)
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  completedAt    DateTime?
+  cancelledAt    DateTime?
+
+  requester User    @relation("RequesterBookings", fields: [requesterId], references: [id], onDelete: Cascade)
+  helper    User    @relation("HelperBookings", fields: [helperId], references: [id], onDelete: Cascade)
+  review    Review?
+
+  @@index([requesterId])
+  @@index([helperId])
+  @@index([status])
+  @@index([scheduledAt])
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  bookingId  String   @unique
+  reviewerId String
+  helperId   String
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  booking  Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  reviewer User    @relation("UserReviewsAuthored", fields: [reviewerId], references: [id], onDelete: Cascade)
+  helper   User    @relation("HelperReviewsReceived", fields: [helperId], references: [id], onDelete: Cascade)
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+  oauth_token_secret String?
+  oauth_token        String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
